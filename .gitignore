@@ -1,3 +1,7 @@
+# Project specific
+output/
+context.md
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

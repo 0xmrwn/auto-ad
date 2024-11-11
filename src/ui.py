@@ -1,7 +1,10 @@
 import logging
 import os
+import threading
+import tkinter as tk
 from datetime import datetime
 from pathlib import Path
+from queue import Queue
 
 import customtkinter as ctk
 
@@ -14,6 +17,8 @@ from .output_generator import OutputGenerator
 class GapDetectorUI(ctk.CTk):
     def __init__(self):
         super().__init__()
+        self.processing_queue = Queue()
+        self.is_processing = False
 
         # Initialize variables
         self.min_gap_duration = ctk.StringVar(value="1.0")  # Changed to StringVar
@@ -216,9 +221,25 @@ class GapDetectorUI(ctk.CTk):
 
     def _process_files(self) -> None:
         """Handle file processing"""
-        if not self._validate_inputs():
+        if not self._validate_inputs() or self.is_processing:
             return
 
+        # Disable the process button and show processing state
+        self.process_btn.configure(state="disabled")
+        self.is_processing = True
+        self._update_output("\nStarting processing...")
+
+        # Start processing thread
+        processing_thread = threading.Thread(
+            target=self._process_files_thread, daemon=True
+        )
+        processing_thread.start()
+
+        # Start checking for completion
+        self.after(100, self._check_processing_complete)
+
+    def _process_files_thread(self) -> None:
+        """Handle file processing in a separate thread"""
         try:
             min_gap = float(self.min_gap_duration.get())
 
@@ -234,61 +255,85 @@ class GapDetectorUI(ctk.CTk):
 
             total_processed = 0
             total_failed = 0
-
-            self._update_output(f"\nProcessing {len(self.selected_files)} files...")
             start_time = datetime.now()
 
+            # Process each file
             for file_path in self.selected_files:
                 try:
+                    self.processing_queue.put(
+                        ("status", f"\nProcessing {Path(file_path).name}...")
+                    )
                     file_path = Path(file_path)
-                    self._update_output(f"\nProcessing {file_path.name}...")
 
-                    # Detect gaps
+                    # Process file
                     gaps, stats = gap_detector.detect_gaps(file_path)
 
-                    # Generate outputs based on user selection
+                    # Generate outputs
                     if self.generate_gap_srt.get():
                         gap_output_path = gaps_dir / f"{file_path.stem}_gaps.srt"
                         output_generator.generate_gap_srt(gaps, gap_output_path)
-                        self._update_output(
-                            f"Generated gap SRT: {gap_output_path.name}"
+                        self.processing_queue.put(
+                            ("status", f"Generated gap SRT: {gap_output_path.name}")
                         )
 
                     if self.generate_summary.get():
                         summary = output_generator.generate_summary(gaps, stats)
                         summary_path = summaries_dir / f"{file_path.stem}_summary.txt"
                         output_generator.save_summary(summary, summary_path)
-                        self._update_output(f"Generated summary: {summary_path.name}")
+                        self.processing_queue.put(
+                            ("status", f"Generated summary: {summary_path.name}")
+                        )
 
                     total_processed += 1
-                    self._update_output(
-                        f"Found {stats['total_gaps']} gaps with total duration "
-                        f"of {stats['total_duration']}"
-                    )
 
                 except Exception as e:
                     total_failed += 1
-                    self._update_output(f"Error processing {file_path.name}: {str(e)}")
-                    logging.error(
-                        f"Error processing {file_path}: {str(e)}", exc_info=True
+                    self.processing_queue.put(
+                        ("error", f"Error processing {file_path.name}: {str(e)}")
                     )
 
-            # Show completion summary
+            # Calculate completion statistics
             elapsed_time = datetime.now() - start_time
-            self._update_output(
+            completion_message = (
                 f"\nProcessing complete!"
                 f"\nSuccessfully processed: {total_processed} files"
                 f"\nFailed: {total_failed} files"
                 f"\nElapsed time: {elapsed_time.total_seconds():.2f} seconds"
             )
-
-            # Enable opening output directory if any files were processed
-            if total_processed > 0:
-                self._add_open_output_button()
+            self.processing_queue.put(
+                ("complete", (completion_message, total_processed))
+            )
 
         except Exception as e:
-            self._update_output(f"Error during processing: {str(e)}")
-            logging.error(f"Error during processing: {str(e)}", exc_info=True)
+            self.processing_queue.put(("error", f"Error during processing: {str(e)}"))
+        finally:
+            self.processing_queue.put(("done", None))
+
+    def _check_processing_complete(self) -> None:
+        """Check for processing updates and completion"""
+        try:
+            while True:
+                msg_type, data = self.processing_queue.get_nowait()
+
+                if msg_type == "status":
+                    self._update_output(data)
+                elif msg_type == "error":
+                    self._update_output(data)
+                elif msg_type == "complete":
+                    message, total_processed = data
+                    self._update_output(message)
+                    if total_processed > 0:
+                        self._add_open_output_button()
+                elif msg_type == "done":
+                    self.is_processing = False
+                    self.process_btn.configure(state="normal")
+                    return
+
+                self.processing_queue.task_done()
+
+        except tk.Empty:
+            # No more updates, check again in 100ms
+            self.after(100, self._check_processing_complete)
 
     def _add_open_output_button(self) -> None:
         """Add a button to open the output directory"""

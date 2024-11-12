@@ -2,8 +2,6 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-import pysrt
-
 from src.input_handler import InputHandler
 from src.models import Gap
 

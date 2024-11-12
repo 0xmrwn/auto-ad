@@ -55,45 +55,39 @@ class OutputGenerator:
         # Save with UTF-8 encoding and BOM for better Windows compatibility
         srt_file.save(output_path, encoding="utf-8-sig")
 
-    def generate_summary(
-        self, gaps: List[Gap], stats: dict, include_details: bool = True
-    ) -> str:
-        """
-        Generate a text summary of the detected gaps
-
-        Args:
-            gaps (List[Gap]): List of detected gaps
-            stats (dict): Statistics dictionary from GapDetector
-            include_details (bool): Whether to include detailed gap information
-
-        Returns:
-            str: Formatted summary text
-        """
+    def generate_detection_summary(self, stats: dict) -> str:
+        """Generate a concise markdown summary with just the statistics"""
         summary = [
-            "Gap Detection Summary",
-            "===================",
-            f"Total Gaps Found: {stats['total_gaps']}",
-            f"Total Gap Duration: {self._format_timedelta(stats['total_duration'])}",
-            f"Average Gap Duration: {self._format_timedelta(stats['average_duration'])}",
-            f"Minimum Gap Duration: {self._format_timedelta(stats['min_duration'])}",
-            f"Maximum Gap Duration: {self._format_timedelta(stats['max_duration'])}",
-            "",
+            "# Gap Detection Summary\n",
+            "| Metric | Value |",
+            "|--------|--------|",
+            f"| Total Gaps | {stats['total_gaps']} |",
+            f"| Total Duration | `{self._format_timedelta(stats['total_duration'])}` |",
+            f"| Average Duration | `{self._format_timedelta(stats['average_duration'])}` |",
+            f"| Minimum Duration | `{self._format_timedelta(stats['min_duration'])}` |",
+            f"| Maximum Duration | `{self._format_timedelta(stats['max_duration'])}` |",
+        ]
+        return "\n".join(summary)
+
+    def generate_detailed_summary(self, gaps: List[Gap], stats: dict) -> str:
+        """Generate a detailed markdown summary including all gaps"""
+        # Start with the detection summary
+        summary = [
+            self.generate_detection_summary(stats),
+            "\n## Detailed Gap Information\n",
         ]
 
-        if include_details and gaps:
-            summary.extend(["Detailed Gap Information", "======================"])
-
+        if gaps:
             for i, gap in enumerate(gaps, start=1):
                 summary.extend(
                     [
-                        f"\nGap #{i}:",
-                        f"Start Time: {self._format_timedelta(gap.start_time)}",
-                        f"End Time: {self._format_timedelta(gap.end_time)}",
-                        f"Duration: {self._format_timedelta(gap.duration)}",
-                        "Context:",
-                        f"  Previous subtitle: {gap.previous_subtitle}",
-                        f"  Next subtitle: {gap.next_subtitle}",
-                        "-" * 40,
+                        f"### Gap #{i}",
+                        f"**Start Time:** `{self._format_timedelta(gap.start_time)}`",
+                        f"**End Time:** `{self._format_timedelta(gap.end_time)}`",
+                        f"**Duration:** `{self._format_timedelta(gap.duration)}`",
+                        "\n**Context:**",
+                        f"- Previous subtitle: _{gap.previous_subtitle}_",
+                        f"- Next subtitle: _{gap.next_subtitle}_\n",
                     ]
                 )
 

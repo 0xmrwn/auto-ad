@@ -5,7 +5,7 @@ from typing import Optional, Tuple
 import pysrt
 from pysrt import SubRipFile
 
-from .utils.encoding import EncodingDetector
+from src.utils.encoding import EncodingDetector
 
 
 class InputHandler:

@@ -4,8 +4,8 @@ from typing import Dict, List, Tuple
 
 import pysrt
 
-from .input_handler import InputHandler
-from .models import Gap
+from src.input_handler import InputHandler
+from src.models import Gap
 
 
 class GapDetector:

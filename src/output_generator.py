@@ -52,8 +52,8 @@ class OutputGenerator:
             )
             srt_file.append(item)
 
-        # Save the SRT file
-        srt_file.save(output_path, encoding="utf-8")
+        # Save with UTF-8 encoding and BOM for better Windows compatibility
+        srt_file.save(output_path, encoding="utf-8-sig")
 
     def generate_summary(
         self, gaps: List[Gap], stats: dict, include_details: bool = True

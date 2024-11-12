@@ -1,6 +1,7 @@
 # Project specific
 output/
 context.md
+.cursorignore
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

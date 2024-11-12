@@ -1,10 +1,9 @@
 import logging
 import os
 import threading
-import tkinter as tk
 from datetime import datetime
 from pathlib import Path
-from queue import Queue
+from queue import Empty, Queue
 
 import customtkinter as ctk
 
@@ -19,6 +18,7 @@ class GapDetectorUI(ctk.CTk):
         super().__init__()
         self.processing_queue = Queue()
         self.is_processing = False
+        self.processing_thread = None
 
         # Initialize variables
         self.min_gap_duration = ctk.StringVar(value="1.0")  # Changed to StringVar
@@ -230,10 +230,10 @@ class GapDetectorUI(ctk.CTk):
         self._update_output("\nStarting processing...")
 
         # Start processing thread
-        processing_thread = threading.Thread(
+        self.processing_thread = threading.Thread(
             target=self._process_files_thread, daemon=True
         )
-        processing_thread.start()
+        self.processing_thread.start()
 
         # Start checking for completion
         self.after(100, self._check_processing_complete)
@@ -310,30 +310,32 @@ class GapDetectorUI(ctk.CTk):
             self.processing_queue.put(("done", None))
 
     def _check_processing_complete(self) -> None:
-        """Check for processing updates and completion"""
+        """Check if processing is complete and update UI accordingly"""
         try:
-            while True:
-                msg_type, data = self.processing_queue.get_nowait()
+            msg_type, data = self.processing_queue.get_nowait()
+            if msg_type == "status":
+                self._update_output(data)
+            elif msg_type == "error":
+                self._update_output(f"Error: {data}")
+            elif msg_type == "complete":
+                message, processed_count = data
+                self._update_output(message)
+                if processed_count > 0:
+                    self._add_open_output_button()
+            elif msg_type == "done":
+                self.is_processing = False
+                self.process_btn.configure(state="normal")
+                return
 
-                if msg_type == "status":
-                    self._update_output(data)
-                elif msg_type == "error":
-                    self._update_output(data)
-                elif msg_type == "complete":
-                    message, total_processed = data
-                    self._update_output(message)
-                    if total_processed > 0:
-                        self._add_open_output_button()
-                elif msg_type == "done":
-                    self.is_processing = False
-                    self.process_btn.configure(state="normal")
-                    return
-
-                self.processing_queue.task_done()
-
-        except tk.Empty:
-            # No more updates, check again in 100ms
+            # Schedule next check
             self.after(100, self._check_processing_complete)
+
+        except Empty:
+            if self.processing_thread and self.processing_thread.is_alive():
+                self.after(100, self._check_processing_complete)
+            else:
+                self.is_processing = False
+                self.process_btn.configure(state="normal")
 
     def _add_open_output_button(self) -> None:
         """Add a button to open the output directory"""

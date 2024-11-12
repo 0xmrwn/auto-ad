@@ -4,6 +4,7 @@ from typing import Dict, List, Tuple
 
 import pysrt
 
+from .input_handler import InputHandler
 from .models import Gap
 
 
@@ -29,8 +30,8 @@ class GapDetector:
         Returns:
             Tuple[List[Gap], Dict]: List of detected gaps and statistics dictionary
         """
-        # Load the SRT file
-        subtitles = pysrt.open(str(srt_path))  # Convert Path to string for pysrt
+        # Load the SRT file using InputHandler
+        subtitles = InputHandler.load_srt_file(str(srt_path))
 
         # Sort subtitles by start time
         sorted_subs = sorted(subtitles, key=lambda x: x.start.ordinal)
